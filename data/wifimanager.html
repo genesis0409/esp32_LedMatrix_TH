@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>ESP-NOW Manager Master</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" type="text/css" href="style.css" />
+  </head>
+  <body>
+    <div class="topnav">
+      <h1>LED 전광판 관리자</h1>
+    </div>
+    <div class="content">
+      <div class="card-grid">
+        <div class="card">
+          <form action="/" method="POST">
+            <HRㅗ>
+              <label for="houseId">House ID</label>
+              <input type="number" min="0" id="houseId" name="houseId" /><br />
+
+              <hr class="hr-text" data-content="WiFi Settings">
+              <label for="ssid">SSID</label>
+              <input
+                type="text"
+                id="ssid"
+                name="ssid"
+                aria-required="true"
+              /><br />
+              <label for="pass">Password</label>
+              <input type="password" id="pass" name="pass" /><br />
+
+              <input type="submit" value="Submit" />
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
