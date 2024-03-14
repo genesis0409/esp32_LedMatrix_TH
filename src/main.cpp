@@ -1,3 +1,10 @@
+// Active/DeActive Brownout problem
+// #define DISABLE_BROWNOUT_PROBLEM
+#if defined(DISABLE_BROWNOUT_PROBLEM)
+#include "soc/soc.h"          // Disable brownout problems
+#include "soc/rtc_cntl_reg.h" // Disable brownout problems
+#endif
+
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <Adafruit_GFX.h>
@@ -6,6 +13,8 @@
 #include <NTPClient.h>
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/GodoM6pt8b.h>
+
+#include "temp_BW_1bit.h"
 
 #include "SPIFFS.h" // Fast
 #include <ESPAsyncWebServer.h>
@@ -31,10 +40,21 @@ const char *passPath = "/pass.txt";
 
 unsigned long currentMillis = 0;
 
+int8_t led_x = 0;
+int8_t led_y = 0;
+
 void initSPIFFS();                                                 // Initialize SPIFFS
 String readFile(fs::FS &fs, const char *path);                     // Read File from SPIFFS
 void writeFile(fs::FS &fs, const char *path, const char *message); // Write file to SPIFFS
-bool isCamConfigDefined();                                         // Is Cam Configuration Defiend?
+bool isWMConfigDefined();                                          // Is Wifi Manager Configuration Defiend?
+bool allowsLoop = false;
+
+String *Split(String sData, char cSeparator, int *scnt);
+void initLED();
+void initWiFi();
+void PrintLED(String m1, String m2);
+void printLocalTime();
+void timeWork(void *para);
 
 // Replace with your network credentials (STATION)
 const char *ntpServer = "pool.ntp.org";
@@ -42,8 +62,8 @@ uint8_t timeZone = 9;
 uint8_t summerTime = 0;
 
 // **********************************************************************************************************
-const char *ssid = "itime";
-const char *password = "daon7521";
+// const char *ssid = "itime";
+// const char *pass = "daon7521";
 // **********************************************************************************************************
 
 P3RGB64x32MatrixPanel matrix(25, 26, 27, 21, 22, 0, 15, 32, 33, 12, 5, 23, 4);
@@ -55,6 +75,8 @@ int Month;
 int Day;
 int Hour;
 int Min;
+
+// Create UDP instance
 WiFiUDP Udp;
 
 TaskHandle_t thWork;
@@ -111,6 +133,22 @@ String *Split(String sData, char cSeparator, int *scnt)
   return charr;
 }
 
+void initWiFi()
+{
+  WiFi.mode(WIFI_STA);
+
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  Serial.print("Connecting to WiFi ..");
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print('.');
+    delay(1000);
+  }
+  Serial.print("Connected IP : ");
+  Serial.println(WiFi.localIP());
+}
+
 void initLED()
 {
   // matrix와 폰트 설정
@@ -125,50 +163,89 @@ void initLED()
   matrix.fillScreen(0); // 화면 클리어
 }
 
-void initWiFi()
-{
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi ..");
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    Serial.print('.');
-    delay(1000);
-  }
-  Serial.println(WiFi.localIP());
-}
+// void PrintLED(String m1, String m2)
+// {
+//   matrix.fillScreen(0); // 화면 클리어
+//   // matrix.fillRect(2, 2, 60, 10, 0);
+//   // matrix.fillRect(27, 12, 35, 19, 0);
+//   matrix.setCursor(3, 13);
+//   matrix.setTextColor(matrix.color444(100, 30, 0));
+//   matrix.print("temp");
+
+//   matrix.setCursor(30, 13);
+//   matrix.setTextColor(matrix.color444(15, 9, 12));
+//   String sTemp = m1 + "C";
+//   matrix.print(sTemp.c_str());
+
+//   matrix.setCursor(3, 23);
+//   matrix.setTextColor(matrix.color444(0, 3, 150));
+//   matrix.print("humi");
+
+//   matrix.setCursor(30, 23);
+//   matrix.setTextColor(matrix.color444(15, 9, 12));
+//   String sHum = m2 + "%";
+//   matrix.print(sHum.c_str());
+
+//   // matrix.setCursor(1, 3);
+//   // matrix.setTextColor(matrix.color444(255, 0, 0));
+//   // // String strtim = String(Month) + "-" + String(Day) + " " + String(Hour) + ":" + String(Min);
+//   // matrix.printf("%02d/%02d", Month, Day);
+
+//   // matrix.setCursor(34, 3);
+//   // matrix.printf("%02d:%02d", Hour, Day);
+
+//   delay(10); // matrix needs minimum delay
+// }
 
 void PrintLED(String m1, String m2)
 {
-  matrix.fillScreen(0); // 화면 클리어
   // matrix.fillRect(2, 2, 60, 10, 0);
   // matrix.fillRect(27, 12, 35, 19, 0);
-  matrix.setCursor(3, 13);
+
+  // 하우스 정보 표시
+  matrix.setCursor(1 + led_x, 1 + led_y);
+  matrix.setTextColor(matrix.color444(100, 30, 0));
+  matrix.print(houseId);
+
+  // 온도 (이미지로된 텍스트)
+  matrix.drawBitmap(0 + led_x, 0 + led_y, IMG_temp, 26, 13, 0xffffff);
+  matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
+
+  // 습도 (이미지로된 텍스트)
+  matrix.drawBitmap(0 + led_x, 0 + led_y, IMG_temp, 26, 13, 0xffffff);
+  matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
+
+  matrix.setCursor(3 + led_x, 13 + led_y);
   matrix.setTextColor(matrix.color444(100, 30, 0));
   matrix.print("temp");
 
-  matrix.setCursor(30, 13);
+  matrix.setCursor(30 + led_x, 13 + led_y);
   matrix.setTextColor(matrix.color444(15, 9, 12));
-  String sTemp = m1 + "C";
+  String sTemp = m1;
+  sTemp = sTemp.substring(0, sTemp.length() - 1) + "C"; // slice zero
   matrix.print(sTemp.c_str());
 
-  matrix.setCursor(3, 23);
+  matrix.setCursor(3 + led_x, 23 + led_y);
   matrix.setTextColor(matrix.color444(0, 3, 150));
   matrix.print("humi");
 
-  matrix.setCursor(30, 23);
+  matrix.setCursor(30 + led_x, 23 + led_y);
   matrix.setTextColor(matrix.color444(15, 9, 12));
-  String sHum = m2 + "%";
+  String sHum = m2;
+  sHum = sHum.substring(0, sHum.length() - 1) + "%"; // slice zero
   matrix.print(sHum.c_str());
 
-  matrix.setCursor(1, 3);
-  matrix.setTextColor(matrix.color444(255, 0, 0));
-  // String strtim = String(Month) + "-" + String(Day) + " " + String(Hour) + ":" + String(Min);
-  matrix.printf("%02d/%02d", Month, Day);
+  // matrix.setCursor(1, 3);
+  // matrix.setTextColor(matrix.color444(255, 0, 0));
+  // // String strtim = String(Month) + "-" + String(Day) + " " + String(Hour) + ":" + String(Min);
+  // matrix.printf("%02d/%02d", Month, Day);
 
-  matrix.setCursor(34, 3);
-  matrix.printf("%02d:%02d", Hour, Day);
+  // matrix.setCursor(34, 3);
+  // matrix.printf("%02d:%02d", Hour, Day);
+
+  delay(10); // matrix needs minimum delay
 }
+
 void printLocalTime()
 {
   struct tm timeinfo;
@@ -249,11 +326,16 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
   }
 }
 
-bool isCamConfigDefined()
+bool isWMConfigDefined()
 {
   if (houseId == "")
   {
-    Serial.println("Undefined Cam ID or slaveMac or Capture Period.");
+    Serial.println("Undefined House ID...");
+    return false;
+  }
+  else if (ssid == "")
+  {
+    Serial.println("Undefined Wifi credentials...");
     return false;
   }
   return true;
@@ -261,21 +343,32 @@ bool isCamConfigDefined()
 
 void setup()
 {
+#if defined(DISABLE_BROWNOUT_PROBLEM)
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable brownout detector
+#endif
+
   Serial.begin(115200);
+  initSPIFFS();
 
   // Load values saved in SPIFFS
   houseId = readFile(SPIFFS, houseIdPath);
+  ssid = readFile(SPIFFS, ssidPath);
+  pass = readFile(SPIFFS, passPath);
 
   Serial.print("HouseID in SPIFFS: ");
   Serial.println(houseId);
+  Serial.print("SSID in SPIFFS: ");
+  Serial.println(ssid);
+  Serial.print("pass in SPIFFS: ");
+  Serial.println(pass.length() == 0 ? "NO password." : "Password exists.");
 
-  // AP모드 진입(cam config reset): softAP() 메소드
-  if (!isCamConfigDefined())
+  // 설정 안된 상태: AP모드 진입(wifi config reset): softAP() 메소드
+  if (!isWMConfigDefined())
   {
-    // Connect to Wi-Fi network with SSID and password
+    // Connect to Wi-Fi network with SSID and pass
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
-    WiFi.softAP("ESP-WIFI-MANAGER Master0", NULL);
+    WiFi.softAP("ESP-LED-MANAGER", NULL);
 
     IPAddress IP = WiFi.softAPIP(); // Software enabled Access Point : 가상 라우터, 가상의 액세스 포인트
     Serial.print("AP IP address: ");
@@ -302,6 +395,24 @@ void setup()
             // Write file to save value
             writeFile(SPIFFS, houseIdPath, houseId.c_str());
           }
+          // HTTP POST ssid value
+          if (p->name() == PARAM_INPUT_2)
+          {
+            ssid = p->value().c_str();
+            Serial.print("SSID set to: ");
+            Serial.println(ssid);
+            // Write file to save value
+            writeFile(SPIFFS, ssidPath, ssid.c_str());
+          }
+          // HTTP POST pass value
+          if (p->name() == PARAM_INPUT_3)
+          {
+            pass = p->value().c_str();
+            Serial.print("Password set to: ");
+            Serial.println(pass);
+            // Write file to save value
+            writeFile(SPIFFS, passPath, pass.c_str());
+          }
           Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
         }
       }
@@ -311,31 +422,24 @@ void setup()
       ESP.restart(); });
     server.begin();
   }
+
+  // 설정 완료 후: wifi 연결
   else
   {
-    Serial.println("CAMERA MASTER STARTED"); // tarted : 시작되다; 자동사인듯?
-    // initCamera();                            // init camera
-    // initSD();                                 // init sd
+    Serial.println("LED Panel STARTED");
+    initLED();
 
-    // Set device in STA mode to begin with
-    WiFi.mode(WIFI_STA);
-    // This is the mac address of the Master in Station Mode
-    Serial.print("STA MAC: ");
-    Serial.println(WiFi.macAddress());
+    initWiFi();
+    Serial.print("RSSI: ");
+    Serial.println(WiFi.RSSI());
 
-    // allowsLoop = true;
+    configTime(3600 * timeZone, 3600 * summerTime, ntpServer);
+    printLocalTime();
+    Udp.begin(11000);
+
+    xTaskCreatePinnedToCore(timeWork, "timeWork", 10000, NULL, 0, &thWork, 0);
+    allowsLoop = true;
   }
-
-  initWiFi();
-  Serial.print("RSSI: ");
-  Serial.println(WiFi.RSSI());
-  initLED();
-
-  configTime(3600 * timeZone, 3600 * summerTime, ntpServer);
-  printLocalTime();
-  Udp.begin(11000);
-
-  xTaskCreatePinnedToCore(timeWork, "timeWork", 10000, NULL, 0, &thWork, 0);
 }
 
 void loop()
@@ -343,34 +447,36 @@ void loop()
 
   unsigned long currentMillis = millis();
   // if WiFi is down, try reconnecting every CHECK_WIFI_TIME seconds
-  if ((WiFi.status() != WL_CONNECTED) && (currentMillis - previousMillis >= interval))
+  if ((WiFi.status() != WL_CONNECTED) && (currentMillis - previousMillis >= interval && allowsLoop))
   {
     Serial.print(millis());
-    Serial.println("Reconnecting to WiFi...");
+    Serial.println("ms; Reconnecting to WiFi...");
     WiFi.disconnect();
     WiFi.reconnect();
     previousMillis = currentMillis;
   }
 
-  int packetSize = Udp.parsePacket();
-  if (packetSize > 0)
-  {
-    Serial.print("Receive Size:");
-    Serial.println(packetSize);
-    int len = Udp.read(packetBuffer, 50);
-    if (len > 0)
-    {
-      int cnt = 0;
-      packetBuffer[len] = 0;
-      Serial.print("Message:");
-      Serial.println(packetBuffer);
-      String *rStr = Split(packetBuffer, '&', &cnt);
-      if (cnt >= 2)
-      {
-        PrintLED(rStr[0], rStr[1]);
-      }
-    }
-  }
+  // // UDP Part
+  // int packetSize = Udp.parsePacket();
+  // if (packetSize > 0)
+  // {
+  //   Serial.print("Receive Size:");
+  //   Serial.println(packetSize);
+  //   int len = Udp.read(packetBuffer, 50);
+  //   if (len > 0)
+  //   {
+  //     int cnt = 0;
+  //     packetBuffer[len] = 0;
+  //     Serial.print("Message:");
+  //     Serial.println(packetBuffer);
+  //     String *rStr = Split(packetBuffer, '&', &cnt);
+  //     if (cnt >= 2)
+  //     {
+  //       matrix.fillScreen(0); // 화면 클리어
+  //       PrintLED(rStr[0], rStr[1]);
+  //     }
+  //   }
+  // }
 
-  PrintLED(String(18.1), String(35.4));
+  PrintLED(String(-18.1), String(35.4));
 }
