@@ -8,7 +8,7 @@
 */
 #define PROGMEM
 
-const unsigned char IMG_temp[] PROGMEM = {
+const unsigned char IMG_temp_1px[] PROGMEM = {
     0x0f, 0xc0, 0x00, 0x00,
     0x30, 0x31, 0xff, 0x80,
     0x20, 0x11, 0x00, 0x00,
@@ -24,7 +24,7 @@ const unsigned char IMG_temp[] PROGMEM = {
     0x00, 0x00, 0x00, 0x00};
 
 /*
-const unsigned short IMG_temp1[] = {
+const unsigned short IMG_temp_1px1[] = {
 0x0fc0,0x0000,
 0x3031,0xff80,
 0x2011,0x0000,
@@ -42,7 +42,7 @@ const unsigned short IMG_temp1[] = {
 */
 
 /*
-const unsigned char IMG_temp2[] = {
+const unsigned char IMG_temp_1px2[] = {
 ____XXXX,XX______,________,________,
 __XX____,__XX___X,XXXXXXXX,X_______,
 __X_____,___X___X,________,________,
