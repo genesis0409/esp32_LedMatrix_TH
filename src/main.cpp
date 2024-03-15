@@ -14,7 +14,12 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/GodoM6pt8b.h>
 
-#include "temp_BW_1bit.h"
+#include "temp_1px_BW_1bit.h"
+#include "temp_2px_BW_1bit.h"
+#include "humi_1px_BW_1bit.h"
+#include "humi_2px_BW_1bit.h"
+
+#include "Matrix_TranslateLED.h"
 
 #include "SPIFFS.h" // Fast
 #include <ESPAsyncWebServer.h>
@@ -40,6 +45,7 @@ const char *passPath = "/pass.txt";
 
 unsigned long currentMillis = 0;
 
+int8_t matrix_index = 0;
 int8_t led_x = 0;
 int8_t led_y = 0;
 
@@ -205,35 +211,48 @@ void PrintLED(String m1, String m2)
   // 하우스 정보 표시
   matrix.setCursor(1 + led_x, 1 + led_y);
   matrix.setTextColor(matrix.color444(100, 30, 0));
-  matrix.print(houseId);
+  // matrix.print(houseId);
+  matrix.print(8);
 
   // 온도 (이미지로된 텍스트)
-  matrix.drawBitmap(0 + led_x, 0 + led_y, IMG_temp, 26, 13, 0xffffff);
+  matrix.drawBitmap(6 + led_x, 1 + led_y, IMG_temp_1px, 26, 13, 0xffff);
   matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
 
   // 습도 (이미지로된 텍스트)
-  matrix.drawBitmap(0 + led_x, 0 + led_y, IMG_temp, 26, 13, 0xffffff);
+  matrix.drawBitmap(6 + led_x, 16 + led_y, IMG_humi_1px, 26, 13, 0xffff);
   matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
 
-  matrix.setCursor(3 + led_x, 13 + led_y);
-  matrix.setTextColor(matrix.color444(100, 30, 0));
-  matrix.print("temp");
+  // // 온도2px (이미지로된 텍스트)
+  // matrix.drawBitmap(35 + led_x, 1 + led_y, IMG_temp_2px, 26, 13, 0xffff);
+  // matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
 
-  matrix.setCursor(30 + led_x, 13 + led_y);
+  // // 습도2px (이미지로된 텍스트)
+  // matrix.drawBitmap(35 + led_x, 16 + led_y, IMG_humi_2px, 26, 13, 0xffff);
+  // matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
+
+  // Print Sensor data - temp
+  matrix.setCursor(35 + led_x, 4 + led_y);
   matrix.setTextColor(matrix.color444(15, 9, 12));
   String sTemp = m1;
   sTemp = sTemp.substring(0, sTemp.length() - 1) + "C"; // slice zero
   matrix.print(sTemp.c_str());
 
-  matrix.setCursor(3 + led_x, 23 + led_y);
-  matrix.setTextColor(matrix.color444(0, 3, 150));
-  matrix.print("humi");
-
-  matrix.setCursor(30 + led_x, 23 + led_y);
+  // Print Sensor data - humi
+  matrix.setCursor(35 + led_x, 19 + led_y);
   matrix.setTextColor(matrix.color444(15, 9, 12));
   String sHum = m2;
   sHum = sHum.substring(0, sHum.length() - 1) + "%"; // slice zero
   matrix.print(sHum.c_str());
+
+  // *************************************************************************************
+
+  // matrix.setCursor(3 + led_x, 13 + led_y);
+  // matrix.setTextColor(matrix.color444(100, 30, 0));
+  // matrix.print("temp");
+
+  // matrix.setCursor(3 + led_x, 23 + led_y);
+  // matrix.setTextColor(matrix.color444(0, 3, 150));
+  // matrix.print("humi");
 
   // matrix.setCursor(1, 3);
   // matrix.setTextColor(matrix.color444(255, 0, 0));
@@ -478,5 +497,21 @@ void loop()
   //   }
   // }
 
-  PrintLED(String(-18.1), String(35.4));
+  // test; Translate LED
+  if (currentMillis - previousMillis >= 5000)
+  {
+    previousMillis = currentMillis;
+    ++matrix_index;
+    if (matrix_index == 9)
+      matrix_index = 0;
+
+    led_x = Matrix_TranslateLED[matrix_index][0];
+    led_y = Matrix_TranslateLED[matrix_index][1];
+
+    matrix.fillScreen(0); // 화면 클리어
+    PrintLED(String(18.1), String(35.4));
+  }
+
+  // // test; only String
+  // PrintLED(String(-18.1), String(35.4));
 }
