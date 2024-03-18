@@ -14,10 +14,9 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/GodoM6pt8b.h>
 
-#include "temp_1px_BW_1bit.h"
-#include "temp_2px_BW_1bit.h"
-#include "humi_1px_BW_1bit.h"
-#include "humi_2px_BW_1bit.h"
+#include "final_Celcius.h"
+#include "final_temp_1px.h"
+#include "final_humi_1px.h"
 
 #include "Matrix_TranslateLED.h"
 
@@ -46,8 +45,8 @@ const char *passPath = "/pass.txt";
 unsigned long currentMillis = 0;
 
 int8_t matrix_index = 0;
-int8_t led_x = 0;
-int8_t led_y = 0;
+int8_t led_x_translate = 0;
+int8_t led_y_translate = 0;
 
 void initSPIFFS();                                                 // Initialize SPIFFS
 String readFile(fs::FS &fs, const char *path);                     // Read File from SPIFFS
@@ -90,52 +89,103 @@ String formattedDate;
 
 String *Split(String sData, char cSeparator, int *scnt)
 {
-  static String charr[17] = {"0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"};
-  int nCount = 0;
-  int nGetIndex = 0;
+  // static String charr[17] = {"0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"};
+  // int nCount = 0; // 분할된 문자열의 개수를 저장할 변수
+  // int nGetIndex = 0;
 
-  // 임시저장
+  // // 임시 저장 문자열
+  // String sTemp = "";
+
+  // // 원본 복사할 문자열
+  // String sCopy = sData;
+
+  // // 문자열을 구분자를 기준으로 분할하여 배열에 저장
+  // while (true)
+  // {
+  //   // 구분자 찾기
+  //   nGetIndex = sCopy.indexOf(cSeparator);
+
+  //   if ((sData.length() - 1) == nGetIndex)
+  //     break;
+  //   // 리턴된 인덱스가 있나?
+  //   if (-1 != nGetIndex)
+  //   {
+  //     // 있다.
+
+  //     // 데이터 넣고
+  //     sTemp = sCopy.substring(0, nGetIndex);
+
+  //     // Serial.println( sTemp );
+
+  //     // 뺀 데이터 만큼 잘라낸다.
+  //     sCopy = sCopy.substring(nGetIndex + 1);
+  //     if (nGetIndex == 0)
+  //       continue;
+  //     charr[nCount] = sTemp;
+  //   }
+  //   else
+  //   {
+  //     // 없으면 마무리 한다.
+  //     // Serial.println( sCopy );
+  //     charr[nCount] = sCopy;
+  //     break;
+  //   }
+
+  //   // 다음 문자로~
+  //   ++nCount;
+  // }
+  // // Serial.println("문자갯수:" + String(nCount));
+  // *scnt = nCount;
+  // return charr;
+
+  // 최대 분할 가능한 문자열 개수
+  const int MAX_STRINGS = 20;
+
+  // 문자열 배열 동적 할당
+  static String charr[MAX_STRINGS];
+
+  // 분할된 문자열의 개수를 저장할 변수
+  int nCount = 0;
+
+  // 임시 저장용 문자열
   String sTemp = "";
 
-  // 원본 복사
+  // 복사할 문자열
   String sCopy = sData;
 
+  // 문자열을 구분자를 기준으로 분할하여 배열에 저장
   while (true)
   {
-    // 구분자 찾기
-    nGetIndex = sCopy.indexOf(cSeparator);
+    // 구분자를 찾음
+    int nGetIndex = sCopy.indexOf(cSeparator);
 
-    if ((sData.length() - 1) == nGetIndex)
-      break;
-    // 리턴된 인덱스가 있나?
-    if (-1 != nGetIndex)
+    // 문자열을 찾지 못한 경우
+    if (-1 == nGetIndex)
     {
-      // 있다.
-
-      // 데이터 넣고
-      sTemp = sCopy.substring(0, nGetIndex);
-
-      // Serial.println( sTemp );
-
-      // 뺀 데이터 만큼 잘라낸다.
-      sCopy = sCopy.substring(nGetIndex + 1);
-      if (nGetIndex == 0)
-        continue;
-      charr[nCount] = sTemp;
-    }
-    else
-    {
-      // 없으면 마무리 한다.
-      // Serial.println( sCopy );
-      charr[nCount] = sCopy;
+      // 남은 문자열을 배열에 저장하고 반복문 종료
+      charr[nCount++] = sCopy;
       break;
     }
 
-    // 다음 문자로~
-    ++nCount;
+    // 구분자를 찾은 경우
+    // 구분자 이전까지의 문자열을 잘라서 배열에 저장
+    charr[nCount++] = sCopy.substring(0, nGetIndex);
+
+    // 다음 문자열을 탐색하기 위해 복사된 문자열을 잘라냄
+    sCopy = sCopy.substring(nGetIndex + 1);
+
+    // 배열이 가득 차면 반복문 종료
+    if (nCount >= MAX_STRINGS)
+    {
+      Serial.println("Message is too long... You have loss data.");
+      break;
+    }
   }
-  // Serial.println("문자갯수:" + String(nCount));
+
+  // 분할된 문자열의 개수를 scnt 포인터를 통해 반환
   *scnt = nCount;
+
+  // 분할된 문자열 배열 반환
   return charr;
 }
 
@@ -205,52 +255,67 @@ void initLED()
 
 void PrintLED(String m1, String m2)
 {
-  // matrix.fillRect(2, 2, 60, 10, 0);
-  // matrix.fillRect(27, 12, 35, 19, 0);
+  // 하우스 정보 테두리 사각형
+  matrix.drawRect(1 + led_x_translate, 1 + led_y_translate, 9, 11, matrix.color444(255, 0, 0));
 
   // 하우스 정보 표시
-  matrix.setCursor(1 + led_x, 1 + led_y);
-  matrix.setTextColor(matrix.color444(100, 30, 0));
-  // matrix.print(houseId);
-  matrix.print(8);
+  matrix.setCursor(3 + led_x_translate, 3 + led_y_translate);
+  matrix.setTextColor(matrix.color444(255, 255, 255));
+  matrix.print(houseId);
+
+#define LED_X_FONT 9
+#define LED_Y_FONT 9
+#define LED_X_NUM 7
+#define LED_Y_NUM 6
+
+#define LED_X_TH 11
+#define LED_Y_T 5
+
+#define LED_X_VALUE 24
+#define LED_Y_VALUE LED_Y_T + 1
+
+#define LED_X_SPACE_Between_TH_VALUE 3
+#define LED_Y_SPACE_BetweenTH 4
+#define LED_Y_SPACE_Between_VALUE LED_Y_SPACE_BetweenTH + 3
 
   // 온도 (이미지로된 텍스트)
-  matrix.drawBitmap(6 + led_x, 1 + led_y, IMG_temp_1px, 26, 13, 0xffff);
-  matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
-
-  // 습도 (이미지로된 텍스트)
-  matrix.drawBitmap(6 + led_x, 16 + led_y, IMG_humi_1px, 26, 13, 0xffff);
-  matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
-
-  // // 온도2px (이미지로된 텍스트)
-  // matrix.drawBitmap(35 + led_x, 1 + led_y, IMG_temp_2px, 26, 13, 0xffff);
+  matrix.drawBitmap(LED_X_TH + led_x_translate, LED_Y_T + led_y_translate, IMG_temp_1px_final, LED_X_FONT * 2, LED_Y_FONT, matrix.color444(100, 30, 0));
   // matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
 
-  // // 습도2px (이미지로된 텍스트)
-  // matrix.drawBitmap(35 + led_x, 16 + led_y, IMG_humi_2px, 26, 13, 0xffff);
+  // 습도 (이미지로된 텍스트)
+  matrix.drawBitmap(LED_X_TH + led_x_translate, LED_Y_T + LED_Y_FONT + LED_Y_SPACE_BetweenTH + led_y_translate, IMG_humi_1px_final, LED_X_FONT * 2, LED_Y_FONT, 24128);
   // matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
 
   // Print Sensor data - temp
-  matrix.setCursor(35 + led_x, 4 + led_y);
-  matrix.setTextColor(matrix.color444(15, 9, 12));
+  matrix.setCursor(LED_X_TH + LED_X_FONT * 2 + LED_X_SPACE_Between_TH_VALUE + led_x_translate, LED_Y_VALUE + led_y_translate);
+  matrix.setTextColor(0xffff);
   String sTemp = m1;
-  sTemp = sTemp.substring(0, sTemp.length() - 1) + "C"; // slice zero
+  sTemp = sTemp.substring(0, sTemp.length());
   matrix.print(sTemp.c_str());
 
+  // Celcius
+  matrix.drawBitmap(LED_X_TH + LED_X_FONT * 2 + LED_X_SPACE_Between_TH_VALUE + LED_X_VALUE + led_x_translate, LED_Y_VALUE + led_y_translate, IMG_celcius_1px_final, 8, 7, matrix.color444(100, 30, 0));
+  matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
+
   // Print Sensor data - humi
-  matrix.setCursor(35 + led_x, 19 + led_y);
-  matrix.setTextColor(matrix.color444(15, 9, 12));
+  matrix.setCursor(LED_X_TH + LED_X_FONT * 2 + LED_X_SPACE_Between_TH_VALUE + led_x_translate, LED_Y_VALUE + LED_Y_NUM + LED_Y_SPACE_Between_VALUE + led_y_translate);
+  matrix.setTextColor(0xffff);
   String sHum = m2;
-  sHum = sHum.substring(0, sHum.length() - 1) + "%"; // slice zero
+  sHum = sHum.substring(0, sHum.length());
   matrix.print(sHum.c_str());
+
+  // Percent mark
+  matrix.setCursor(LED_X_TH + LED_X_FONT * 2 + LED_X_SPACE_Between_TH_VALUE + LED_X_VALUE + led_x_translate, LED_Y_VALUE + LED_Y_NUM + LED_Y_SPACE_Between_VALUE + led_y_translate);
+  matrix.setTextColor(24128);
+  matrix.print("%");
 
   // *************************************************************************************
 
-  // matrix.setCursor(3 + led_x, 13 + led_y);
+  // matrix.setCursor(3 + led_x_translate, 13 + led_y_translate);
   // matrix.setTextColor(matrix.color444(100, 30, 0));
   // matrix.print("temp");
 
-  // matrix.setCursor(3 + led_x, 23 + led_y);
+  // matrix.setCursor(3 + led_x_translate, 23 + led_y_translate);
   // matrix.setTextColor(matrix.color444(0, 3, 150));
   // matrix.print("humi");
 
@@ -475,42 +540,55 @@ void loop()
     previousMillis = currentMillis;
   }
 
-  // // UDP Part
-  // int packetSize = Udp.parsePacket();
-  // if (packetSize > 0)
-  // {
-  //   Serial.print("Receive Size:");
-  //   Serial.println(packetSize);
-  //   int len = Udp.read(packetBuffer, 50);
-  //   if (len > 0)
-  //   {
-  //     int cnt = 0;
-  //     packetBuffer[len] = 0;
-  //     Serial.print("Message:");
-  //     Serial.println(packetBuffer);
-  //     String *rStr = Split(packetBuffer, '&', &cnt);
-  //     if (cnt >= 2)
-  //     {
-  //       matrix.fillScreen(0); // 화면 클리어
-  //       PrintLED(rStr[0], rStr[1]);
-  //     }
-  //   }
-  // }
-
-  // test; Translate LED
-  if (currentMillis - previousMillis >= 5000)
+  // UDP Part
+  int packetSize = Udp.parsePacket();
+  if (packetSize > 0)
   {
-    previousMillis = currentMillis;
-    ++matrix_index;
-    if (matrix_index == 9)
-      matrix_index = 0;
+    Serial.print("Receive Size:");
+    Serial.println(packetSize);
+    int len = Udp.read(packetBuffer, 50);
+    if (len > 0)
+    {
+      int cnt = 0;
+      packetBuffer[len] = 0;
+      Serial.print("Message: ");
+      Serial.println(packetBuffer);
+      String *rStr = Split(packetBuffer, '&', &cnt);
+      if (cnt >= 2)
+      {
+        matrix.fillScreen(0);       // 화면 클리어
+        PrintLED(rStr[1], rStr[2]); // { messageId, temp, humi }
+        Serial.println(rStr[0]);
+        Serial.println(rStr[1]);
+        Serial.println(rStr[2]);
 
-    led_x = Matrix_TranslateLED[matrix_index][0];
-    led_y = Matrix_TranslateLED[matrix_index][1];
+        // Led Translate logic
+        ++matrix_index;
+        if (matrix_index == 9)
+          matrix_index = 0;
 
-    matrix.fillScreen(0); // 화면 클리어
-    PrintLED(String(18.1), String(35.4));
+        led_x_translate = Matrix_TranslateLED[matrix_index][0];
+        led_y_translate = Matrix_TranslateLED[matrix_index][1];
+      }
+    }
   }
+
+  // // test; Translate LED
+  // currentMillis = millis();
+  // if (currentMillis - previousMillis >= 10000)
+  // {
+  //   previousMillis = currentMillis;
+
+  //   matrix.fillScreen(0); // 화면 클리어
+  //   PrintLED(String(18.9), String(37.4));
+
+  //   ++matrix_index;
+  //   if (matrix_index == 9)
+  //     matrix_index = 0;
+
+  //   led_x_translate = Matrix_TranslateLED[matrix_index][0];
+  //   led_y_translate = Matrix_TranslateLED[matrix_index][1];
+  // }
 
   // // test; only String
   // PrintLED(String(-18.1), String(35.4));
