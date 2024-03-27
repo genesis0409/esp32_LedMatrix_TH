@@ -81,6 +81,15 @@ int Day;
 int Hour;
 int Min;
 
+// For Factory Reset (Erase Flash and Restart)
+#define resetButton 13
+int buttonState = HIGH;             // 버튼 상태 초기화
+int lastButtonState = LOW;          // 이전 버튼 상태 초기화
+unsigned long lastDebounceTime = 0; // 마지막 입력 디바운스 시간 초기화
+unsigned long debounceDelay = 50;   // 디바운스 시간 설정 (50ms)
+unsigned long pressStartTime = 0;   // 버튼을 누른 시작 시간 초기화
+bool isPressed;
+
 // Create UDP instance
 WiFiUDP Udp;
 
@@ -89,55 +98,6 @@ String formattedDate;
 
 String *Split(String sData, char cSeparator, int *scnt)
 {
-  // static String charr[17] = {"0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"};
-  // int nCount = 0; // 분할된 문자열의 개수를 저장할 변수
-  // int nGetIndex = 0;
-
-  // // 임시 저장 문자열
-  // String sTemp = "";
-
-  // // 원본 복사할 문자열
-  // String sCopy = sData;
-
-  // // 문자열을 구분자를 기준으로 분할하여 배열에 저장
-  // while (true)
-  // {
-  //   // 구분자 찾기
-  //   nGetIndex = sCopy.indexOf(cSeparator);
-
-  //   if ((sData.length() - 1) == nGetIndex)
-  //     break;
-  //   // 리턴된 인덱스가 있나?
-  //   if (-1 != nGetIndex)
-  //   {
-  //     // 있다.
-
-  //     // 데이터 넣고
-  //     sTemp = sCopy.substring(0, nGetIndex);
-
-  //     // Serial.println( sTemp );
-
-  //     // 뺀 데이터 만큼 잘라낸다.
-  //     sCopy = sCopy.substring(nGetIndex + 1);
-  //     if (nGetIndex == 0)
-  //       continue;
-  //     charr[nCount] = sTemp;
-  //   }
-  //   else
-  //   {
-  //     // 없으면 마무리 한다.
-  //     // Serial.println( sCopy );
-  //     charr[nCount] = sCopy;
-  //     break;
-  //   }
-
-  //   // 다음 문자로~
-  //   ++nCount;
-  // }
-  // // Serial.println("문자갯수:" + String(nCount));
-  // *scnt = nCount;
-  // return charr;
-
   // 최대 분할 가능한 문자열 개수
   const int MAX_STRINGS = 20;
 
@@ -412,14 +372,9 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
 
 bool isWMConfigDefined()
 {
-  if (houseId == "")
+  if (houseId == "" || ssid == "")
   {
-    Serial.println("Undefined House ID...");
-    return false;
-  }
-  else if (ssid == "")
-  {
-    Serial.println("Undefined Wifi credentials...");
+    Serial.println("Undefined House ID or Wifi credentials...");
     return false;
   }
   return true;
@@ -432,6 +387,9 @@ void setup()
 #endif
 
   Serial.begin(115200);
+
+  pinMode(resetButton, INPUT_PULLUP); // 리셋버튼 GPIO13; 평상시 HIGH, 누르면 LOW
+
   initSPIFFS();
 
   // Load values saved in SPIFFS
@@ -528,7 +486,6 @@ void setup()
 
 void loop()
 {
-
   unsigned long currentMillis = millis();
   // if WiFi is down, try reconnecting every CHECK_WIFI_TIME seconds
   if ((WiFi.status() != WL_CONNECTED) && (currentMillis - previousMillis >= interval && allowsLoop))
@@ -572,6 +529,52 @@ void loop()
       }
     }
   }
+
+  int resetReading = digitalRead(resetButton); // 버튼 상태 읽기
+  // 디바운스를 위한 지연 시간; 상태가 변해야 카운트 시작
+  if (resetReading != lastButtonState)
+  {
+    lastDebounceTime = millis();
+  }
+
+  // 디바운스 시간이 지난 후 버튼 상태 업데이트
+  if (millis() - lastDebounceTime > debounceDelay)
+  {
+    // 버튼 상태 업데이트
+    if (resetReading != buttonState) // 버튼 상태가 바뀌면
+    {
+      buttonState = resetReading; // 버튼 상태 업데이트
+      Serial.println(buttonState);
+
+      // 버튼이 눌렸을 때 (안누름->누름 상태변화)
+      if (buttonState == LOW)
+      {
+        Serial.println("Factory Reset Button Pressed.");
+        pressStartTime = millis(); // 버튼을 누른 시작 시간 기록
+      }
+      // 버튼이 눌리지 않았을 때 (누름->안누름, 버튼을 뗐을 때)
+      else
+      {
+        // 버튼을 10초이상 누르다가 뗐을 때 & 마지막 버튼 상태가 low (눌림)라면
+        if ((millis() - pressStartTime >= 10000))
+        {
+          // reset 기능 구현
+          Serial.println("Reset Button pressed continuously for 10 secs.");
+          Serial.println("Running Factory Reset...");
+
+          SPIFFS.remove(houseIdPath);
+          SPIFFS.remove(ssidPath);
+          SPIFFS.remove(passPath);
+          Serial.println("Factory Reset Complete.");
+
+          Serial.println("ESP will restart.");
+          delay(1000);
+          ESP.restart();
+        }
+      }
+    }
+  }
+  lastButtonState = resetReading; // 이전 버튼 상태 업데이트
 
   // // test; Translate LED
   // currentMillis = millis();
