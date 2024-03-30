@@ -44,6 +44,22 @@ const char *passPath = "/pass.txt";
 
 unsigned long currentMillis = 0;
 
+// LED matrix 좌표, 상대간격
+#define LED_X_FONT 9
+#define LED_Y_FONT 9
+#define LED_X_NUM 7
+#define LED_Y_NUM 6
+
+#define LED_X_TH 11
+#define LED_Y_T 5
+
+#define LED_X_VALUE 24
+#define LED_Y_VALUE LED_Y_T + 1
+
+#define LED_X_SPACE_Between_TH_VALUE 3
+#define LED_Y_SPACE_BetweenTH 4
+#define LED_Y_SPACE_Between_VALUE LED_Y_SPACE_BetweenTH + 3
+
 int8_t matrix_index = 0;
 int8_t led_x_translate = 0;
 int8_t led_y_translate = 0;
@@ -88,7 +104,18 @@ int lastButtonState = LOW;          // 이전 버튼 상태 초기화
 unsigned long lastDebounceTime = 0; // 마지막 입력 디바운스 시간 초기화
 unsigned long debounceDelay = 50;   // 디바운스 시간 설정 (50ms)
 unsigned long pressStartTime = 0;   // 버튼을 누른 시작 시간 초기화
-bool isPressed;
+bool isResetBtnPressed = false;
+bool isRunNextif0 = false;
+bool isRunNextif1 = false;
+bool isRunNextif2 = false;
+bool isRunNextif3 = false;
+bool isRunNextif4 = false;
+bool isRunNextif5 = false;
+bool isRunNextif6 = false;
+bool isRunNextif7 = false;
+bool isRunNextif8 = false;
+bool isRunNextif9 = false;
+bool isRunNextif10 = false;
 
 // Create UDP instance
 WiFiUDP Udp;
@@ -223,21 +250,6 @@ void PrintLED(String m1, String m2)
   matrix.setTextColor(matrix.color444(255, 255, 255));
   matrix.print(houseId);
 
-#define LED_X_FONT 9
-#define LED_Y_FONT 9
-#define LED_X_NUM 7
-#define LED_Y_NUM 6
-
-#define LED_X_TH 11
-#define LED_Y_T 5
-
-#define LED_X_VALUE 24
-#define LED_Y_VALUE LED_Y_T + 1
-
-#define LED_X_SPACE_Between_TH_VALUE 3
-#define LED_Y_SPACE_BetweenTH 4
-#define LED_Y_SPACE_Between_VALUE LED_Y_SPACE_BetweenTH + 3
-
   // 온도 (이미지로된 텍스트)
   matrix.drawBitmap(LED_X_TH + led_x_translate, LED_Y_T + led_y_translate, IMG_temp_1px_final, LED_X_FONT * 2, LED_Y_FONT, matrix.color444(100, 30, 0));
   // matrix.swapBuffer(); // 버퍼를 교환하여 화면에 출력
@@ -286,6 +298,8 @@ void PrintLED(String m1, String m2)
 
   // matrix.setCursor(34, 3);
   // matrix.printf("%02d:%02d", Hour, Day);
+
+  // *************************************************************************************
 
   delay(10); // matrix needs minimum delay
 }
@@ -480,7 +494,7 @@ void setup()
     Udp.begin(11000);
 
     xTaskCreatePinnedToCore(timeWork, "timeWork", 10000, NULL, 0, &thWork, 0);
-    allowsLoop = true;
+    allowsLoop = true; // 활용 x
   }
 }
 
@@ -521,7 +535,7 @@ void loop()
 
         // Led Translate logic
         ++matrix_index;
-        if (matrix_index == 9)
+        if (matrix_index == 9) // 이동 행렬 초기화
           matrix_index = 0;
 
         led_x_translate = Matrix_TranslateLED[matrix_index][0];
@@ -550,6 +564,19 @@ void loop()
       if (buttonState == LOW)
       {
         Serial.println("Factory Reset Button Pressed.");
+
+        isResetBtnPressed = true; // bool 옵션넣고 초기 reset문자 띄우고
+        isRunNextif0 = true;
+
+        // Print Reset state
+        matrix.setCursor(0, 25);
+
+        matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+        matrix.print("Reset");
+
+        // udp print영역에서 화면 지우는것 따라 reset 텍스트 유지하면서
+        // 이 구역에선 초당 . 하나씩 늘려가면서 푸른색 유지
+
         pressStartTime = millis(); // 버튼을 누른 시작 시간 기록
       }
       // 버튼이 눌리지 않았을 때 (누름->안누름, 버튼을 뗐을 때)
@@ -595,4 +622,102 @@ void loop()
 
   // // test; only String
   // PrintLED(String(-18.1), String(35.4));
+
+  // 1초마다 '.' 늘려가도록 하드코딩 -.-
+  if ((millis() - pressStartTime < 1000) && isRunNextif0)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset.");
+
+    isRunNextif0 = false;
+    isRunNextif1 = true;
+  }
+  if ((1000 <= millis() - pressStartTime < 2000) && isRunNextif1)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset.");
+
+    isRunNextif1 = false;
+    isRunNextif2 = true;
+  }
+  else if ((2000 <= millis() - pressStartTime < 3000) && isRunNextif2)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset..");
+
+    isRunNextif2 = false;
+    isRunNextif3 = true;
+  }
+  else if ((3000 <= millis() - pressStartTime < 4000) && isRunNextif3)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset...");
+
+    isRunNextif3 = false;
+    isRunNextif4 = true;
+  }
+  else if ((4000 <= millis() - pressStartTime < 5000) && isRunNextif4)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset....");
+
+    isRunNextif4 = false;
+    isRunNextif5 = true;
+  }
+  else if ((5000 <= millis() - pressStartTime < 6000) && isRunNextif5)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset.....");
+
+    isRunNextif5 = false;
+    isRunNextif6 = true;
+  }
+  else if ((6000 <= millis() - pressStartTime < 7000) && isRunNextif6)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset......");
+
+    isRunNextif6 = false;
+    isRunNextif7 = true;
+  }
+  else if ((7000 <= millis() - pressStartTime < 8000) && isRunNextif7)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset.......");
+
+    isRunNextif7 = false;
+    isRunNextif8 = true;
+  }
+  else if ((8000 <= millis() - pressStartTime < 9000) && isRunNextif8)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset........");
+
+    isRunNextif8 = false;
+    isRunNextif9 = true;
+  }
+  else if ((9000 <= millis() - pressStartTime < 10000) && isRunNextif9)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+    matrix.print("Reset.........");
+
+    isRunNextif9 = false;
+    isRunNextif10 = true;
+  }
+  else if ((10000 <= millis() - pressStartTime) && isRunNextif10)
+  {
+    matrix.setCursor(0, 25);
+    matrix.setTextColor(matrix.color444(255, 127, 0)); // 반전, 주황색
+    matrix.print("Reset..........");
+  }
 }
