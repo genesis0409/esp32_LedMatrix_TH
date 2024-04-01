@@ -105,17 +105,11 @@ unsigned long lastDebounceTime = 0; // 마지막 입력 디바운스 시간 초�
 unsigned long debounceDelay = 50;   // 디바운스 시간 설정 (50ms)
 unsigned long pressStartTime = 0;   // 버튼을 누른 시작 시간 초기화
 bool isResetBtnPressed = false;
-bool isRunNextif0 = false;
 bool isRunNextif1 = false;
 bool isRunNextif2 = false;
 bool isRunNextif3 = false;
 bool isRunNextif4 = false;
 bool isRunNextif5 = false;
-bool isRunNextif6 = false;
-bool isRunNextif7 = false;
-bool isRunNextif8 = false;
-bool isRunNextif9 = false;
-bool isRunNextif10 = false;
 
 // Create UDP instance
 WiFiUDP Udp;
@@ -512,38 +506,42 @@ void loop()
   }
 
   // UDP Part
-  int packetSize = Udp.parsePacket();
-  if (packetSize > 0)
+  if (allowsLoop)
   {
-    Serial.print("Receive Size:");
-    Serial.println(packetSize);
-    int len = Udp.read(packetBuffer, 50);
-    if (len > 0)
+    int packetSize = Udp.parsePacket();
+    if (packetSize > 0)
     {
-      int cnt = 0;
-      packetBuffer[len] = 0;
-      Serial.print("Message: ");
-      Serial.println(packetBuffer);
-      String *rStr = Split(packetBuffer, '&', &cnt);
-      if (cnt >= 2)
+      Serial.print("Receive Size:");
+      Serial.println(packetSize);
+      int len = Udp.read(packetBuffer, 50);
+      if (len > 0)
       {
-        matrix.fillScreen(0);       // 화면 클리어
-        PrintLED(rStr[1], rStr[2]); // { messageId, temp, humi }
-        Serial.println(rStr[0]);
-        Serial.println(rStr[1]);
-        Serial.println(rStr[2]);
+        int cnt = 0;
+        packetBuffer[len] = 0;
+        Serial.print("Message: ");
+        Serial.println(packetBuffer);
+        String *rStr = Split(packetBuffer, '&', &cnt);
+        if (cnt >= 2)
+        {
+          matrix.fillScreen(0);       // 화면 클리어
+          PrintLED(rStr[1], rStr[2]); // { messageId, temp, humi }
+          Serial.println(rStr[0]);
+          Serial.println(rStr[1]);
+          Serial.println(rStr[2]);
 
-        // Led Translate logic
-        ++matrix_index;
-        if (matrix_index == 9) // 이동 행렬 초기화
-          matrix_index = 0;
+          // Led Translate logic
+          ++matrix_index;
+          if (matrix_index == 9) // 이동 행렬 초기화
+            matrix_index = 0;
 
-        led_x_translate = Matrix_TranslateLED[matrix_index][0];
-        led_y_translate = Matrix_TranslateLED[matrix_index][1];
+          led_x_translate = Matrix_TranslateLED[matrix_index][0];
+          led_y_translate = Matrix_TranslateLED[matrix_index][1];
+        }
       }
     }
   }
 
+  // 공장 초기화 기능 추가 : 버튼-GPIO13
   int resetReading = digitalRead(resetButton); // 버튼 상태 읽기
   // 디바운스를 위한 지연 시간; 상태가 변해야 카운트 시작
   if (resetReading != lastButtonState)
@@ -566,7 +564,7 @@ void loop()
         Serial.println("Factory Reset Button Pressed.");
 
         isResetBtnPressed = true; // bool 옵션넣고 초기 reset문자 띄우고
-        isRunNextif0 = true;
+        isRunNextif1 = true;
 
         // Print Reset state
         matrix.setCursor(0, 25);
@@ -583,10 +581,10 @@ void loop()
       else
       {
         // 버튼을 10초이상 누르다가 뗐을 때 & 마지막 버튼 상태가 low (눌림)라면
-        if ((millis() - pressStartTime >= 10000))
+        if ((millis() - pressStartTime >= 5000))
         {
           // reset 기능 구현
-          Serial.println("Reset Button pressed continuously for 10 secs.");
+          Serial.println("Reset Button pressed continuously for 5 secs.");
           Serial.println("Running Factory Reset...");
 
           SPIFFS.remove(houseIdPath);
@@ -624,16 +622,8 @@ void loop()
   // PrintLED(String(-18.1), String(35.4));
 
   // 1초마다 '.' 늘려가도록 하드코딩 -.-
-  if ((millis() - pressStartTime < 1000) && isRunNextif0)
-  {
-    matrix.setCursor(0, 25);
-    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
-    matrix.print("Reset.");
-
-    isRunNextif0 = false;
-    isRunNextif1 = true;
-  }
-  if ((1000 <= millis() - pressStartTime < 2000) && isRunNextif1)
+  currentMillis = millis();
+  if ((1000 <= currentMillis - pressStartTime && currentMillis - pressStartTime < 2000) && buttonState == 0 && isRunNextif1)
   {
     matrix.setCursor(0, 25);
     matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
@@ -642,7 +632,7 @@ void loop()
     isRunNextif1 = false;
     isRunNextif2 = true;
   }
-  else if ((2000 <= millis() - pressStartTime < 3000) && isRunNextif2)
+  else if ((2000 <= currentMillis - pressStartTime && currentMillis - pressStartTime < 3000) && buttonState == 0 && isRunNextif2)
   {
     matrix.setCursor(0, 25);
     matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
@@ -651,7 +641,7 @@ void loop()
     isRunNextif2 = false;
     isRunNextif3 = true;
   }
-  else if ((3000 <= millis() - pressStartTime < 4000) && isRunNextif3)
+  else if ((3000 <= currentMillis - pressStartTime && currentMillis - pressStartTime < 4000) && buttonState == 0 && isRunNextif3)
   {
     matrix.setCursor(0, 25);
     matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
@@ -660,7 +650,7 @@ void loop()
     isRunNextif3 = false;
     isRunNextif4 = true;
   }
-  else if ((4000 <= millis() - pressStartTime < 5000) && isRunNextif4)
+  else if ((4000 <= currentMillis - pressStartTime && currentMillis - pressStartTime < 5000) && buttonState == 0 && isRunNextif4)
   {
     matrix.setCursor(0, 25);
     matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
@@ -669,55 +659,10 @@ void loop()
     isRunNextif4 = false;
     isRunNextif5 = true;
   }
-  else if ((5000 <= millis() - pressStartTime < 6000) && isRunNextif5)
-  {
-    matrix.setCursor(0, 25);
-    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
-    matrix.print("Reset.....");
-
-    isRunNextif5 = false;
-    isRunNextif6 = true;
-  }
-  else if ((6000 <= millis() - pressStartTime < 7000) && isRunNextif6)
-  {
-    matrix.setCursor(0, 25);
-    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
-    matrix.print("Reset......");
-
-    isRunNextif6 = false;
-    isRunNextif7 = true;
-  }
-  else if ((7000 <= millis() - pressStartTime < 8000) && isRunNextif7)
-  {
-    matrix.setCursor(0, 25);
-    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
-    matrix.print("Reset.......");
-
-    isRunNextif7 = false;
-    isRunNextif8 = true;
-  }
-  else if ((8000 <= millis() - pressStartTime < 9000) && isRunNextif8)
-  {
-    matrix.setCursor(0, 25);
-    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
-    matrix.print("Reset........");
-
-    isRunNextif8 = false;
-    isRunNextif9 = true;
-  }
-  else if ((9000 <= millis() - pressStartTime < 10000) && isRunNextif9)
-  {
-    matrix.setCursor(0, 25);
-    matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
-    matrix.print("Reset.........");
-
-    isRunNextif9 = false;
-    isRunNextif10 = true;
-  }
-  else if ((10000 <= millis() - pressStartTime) && isRunNextif10)
+  else if ((5000 <= currentMillis - pressStartTime) && buttonState == 0 && isRunNextif5)
   {
     matrix.setCursor(0, 25);
     matrix.setTextColor(matrix.color444(255, 127, 0)); // 반전, 주황색
-    matrix.print("Reset..........");
+    matrix.print("Reset.....");
   }
 }
