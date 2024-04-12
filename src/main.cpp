@@ -111,7 +111,7 @@ bool isRunNextif3 = false;
 bool isRunNextif4 = false;
 bool isRunNextif5 = false;
 
-int resetReading = digitalRead(resetButton); // 버튼 상태 읽기
+int resetReading; // 리셋 버튼 상태 변수
 
 // Create UDP instance
 WiFiUDP Udp;
@@ -590,6 +590,7 @@ void loop()
   }
 
   // 공장 초기화 기능 추가 : 버튼-GPIO13
+  resetReading = digitalRead(resetButton); // 버튼 상태 읽기
   // 디바운스를 위한 지연 시간; 상태가 변해야 카운트 시작
   if (resetReading != lastButtonState)
   {
