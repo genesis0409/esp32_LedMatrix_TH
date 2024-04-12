@@ -111,6 +111,8 @@ bool isRunNextif3 = false;
 bool isRunNextif4 = false;
 bool isRunNextif5 = false;
 
+int resetReading = digitalRead(resetButton); // 버튼 상태 읽기
+
 // Create UDP instance
 WiFiUDP Udp;
 
@@ -179,8 +181,51 @@ void initWiFi()
 
   while (WiFi.status() != WL_CONNECTED)
   {
+    // print "Connect WiFi"
+    matrix.setCursor(6, 6);
+    matrix.setTextColor(matrix.color444(255, 255, 255));
+    matrix.print("Connect");
+
+    matrix.setCursor(20, 18);
+    matrix.setTextColor(matrix.color444(255, 255, 255));
+    matrix.print("WiFi...");
+
     Serial.print('.');
-    delay(1000);
+
+    delay(700);
+    matrix.fillScreen(0);
+    delay(300);
+
+    // wifi 연결 중 리셋 기능
+    resetReading = digitalRead(resetButton); // 버튼 상태 읽기
+    if (resetReading != buttonState)         // 버튼 상태가 바뀌면
+    {
+      buttonState = resetReading; // 버튼 상태 업데이트
+      Serial.println(buttonState);
+
+      // 버튼이 눌렸을 때 (안누름->누름 상태변화)
+      if (buttonState == LOW)
+      {
+        Serial.println("Factory Reset Button Pressed.");
+
+        // Print Reset state
+        matrix.setCursor(0, 25);
+
+        matrix.setTextColor(matrix.color444(0, 127, 255)); // 바다색
+        matrix.print("Reset");
+
+        delay(1000);
+
+        SPIFFS.remove(houseIdPath);
+        SPIFFS.remove(ssidPath);
+        SPIFFS.remove(passPath);
+        Serial.println("Factory Reset Complete.");
+
+        Serial.println("ESP will restart.");
+        delay(1000);
+        ESP.restart();
+      }
+    }
   }
   Serial.print("Connected IP : ");
   Serial.println(WiFi.localIP());
@@ -478,6 +523,7 @@ void setup()
   {
     Serial.println("LED Panel STARTED");
     initLED();
+    matrix.fillScreen(0);
 
     initWiFi();
     Serial.print("RSSI: ");
@@ -488,9 +534,11 @@ void setup()
     Udp.begin(11000);
 
     xTaskCreatePinnedToCore(timeWork, "timeWork", 10000, NULL, 0, &thWork, 0);
-    allowsLoop = true; // 활용 x
+    allowsLoop = true;
   }
 }
+
+String *rStr = nullptr;
 
 void loop()
 {
@@ -520,7 +568,7 @@ void loop()
         packetBuffer[len] = 0;
         Serial.print("Message: ");
         Serial.println(packetBuffer);
-        String *rStr = Split(packetBuffer, '&', &cnt);
+        rStr = Split(packetBuffer, '&', &cnt);
         if (cnt >= 2)
         {
           matrix.fillScreen(0);       // 화면 클리어
@@ -542,7 +590,6 @@ void loop()
   }
 
   // 공장 초기화 기능 추가 : 버튼-GPIO13
-  int resetReading = digitalRead(resetButton); // 버튼 상태 읽기
   // 디바운스를 위한 지연 시간; 상태가 변해야 카운트 시작
   if (resetReading != lastButtonState)
   {
@@ -595,6 +642,12 @@ void loop()
           Serial.println("ESP will restart.");
           delay(1000);
           ESP.restart();
+        }
+        else
+        {
+          matrix.fillScreen(0); // 화면 클리어
+          if (rStr != nullptr)
+            PrintLED(rStr[1], rStr[2]);
         }
       }
     }
