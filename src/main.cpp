@@ -73,7 +73,9 @@ bool allowsLoop = false;
 String *Split(String sData, char cSeparator, int *scnt);
 void initLED();
 void initWiFi();
-void PrintLED(String m1, String m2);
+void PrintLED(String m0, String m1, String m2); // 센서값 출력함수
+void PrintInvalidData();                        // 데이터 만료(일정 기간 미수신) 출력
+void TranslateLedLogic();                       // led 패턴이동 로직
 void printLocalTime();
 void timeWork(void *para);
 
@@ -88,8 +90,11 @@ uint8_t summerTime = 0;
 // **********************************************************************************************************
 
 P3RGB64x32MatrixPanel matrix(25, 26, 27, 21, 22, 0, 15, 32, 33, 12, 5, 23, 4);
-unsigned long previousMillis = 0;
-unsigned long interval = 30000;
+
+unsigned long previousInvalidDataMillis = 0; // 데이터 무효화 타이머
+unsigned long previousNoPacketMillis = 0;    // 패킷 수신 대기 타이머
+unsigned long previousWiFiMillis = 0;
+unsigned long interval = 30000; // wifi 재연결 주기
 char packetBuffer[60];
 int Year;
 int Month;
@@ -112,6 +117,11 @@ bool isRunNextif4 = false;
 bool isRunNextif5 = false;
 
 int resetReading; // 리셋 버튼 상태 변수
+
+// 센서 데이터 만료 시간
+#define DATA_INVALID_TIME 600000 // 60만: 10분
+// 패킷 수신대기 만료 시간
+#define WATING_RCV_PACKET_TIME 1800000 // 60만: 10분
 
 // Create UDP instance
 WiFiUDP Udp;
@@ -182,13 +192,15 @@ void initWiFi()
   while (WiFi.status() != WL_CONNECTED)
   {
     // print "Connect WiFi"
-    matrix.setCursor(6, 6);
+    matrix.setCursor(6 + led_x_translate, 6 + led_y_translate);
     matrix.setTextColor(matrix.color444(255, 255, 255));
     matrix.print("Connect");
 
-    matrix.setCursor(20, 18);
+    matrix.setCursor(20 + led_x_translate, 18 + led_y_translate);
     matrix.setTextColor(matrix.color444(255, 255, 255));
     matrix.print("WiFi...");
+
+    TranslateLedLogic();
 
     Serial.print('.');
 
@@ -196,7 +208,7 @@ void initWiFi()
     matrix.fillScreen(0);
     delay(300);
 
-    // wifi 연결 중 리셋 기능
+    // wifi 연결 중 리셋 기능: 한 번만 눌러도 리셋
     resetReading = digitalRead(resetButton); // 버튼 상태 읽기
     if (resetReading != buttonState)         // 버튼 상태가 바뀌면
     {
@@ -279,7 +291,7 @@ void initLED()
 //   delay(10); // matrix needs minimum delay
 // }
 
-void PrintLED(String m1, String m2)
+void PrintLED(String m0, String m1, String m2)
 {
   // 하우스 정보 테두리 사각형
   matrix.drawRect(1 + led_x_translate, 1 + led_y_translate, 9, 11, matrix.color444(255, 0, 0));
@@ -287,7 +299,14 @@ void PrintLED(String m1, String m2)
   // 하우스 정보 표시
   matrix.setCursor(3 + led_x_translate, 3 + led_y_translate);
   matrix.setTextColor(matrix.color444(255, 255, 255));
-  matrix.print(houseId);
+  if (houseId == "")
+  {
+    matrix.print(m0);
+  }
+  else
+  {
+    matrix.print(houseId);
+  }
 
   // 온도 (이미지로된 텍스트)
   matrix.drawBitmap(LED_X_TH + led_x_translate, LED_Y_T + led_y_translate, IMG_temp_1px_final, LED_X_FONT * 2, LED_Y_FONT, matrix.color444(100, 30, 0));
@@ -341,6 +360,30 @@ void PrintLED(String m1, String m2)
   // *************************************************************************************
 
   delay(10); // matrix needs minimum delay
+}
+
+void PrintInvalidData(String s0, String s1)
+{
+  matrix.setCursor(11 + led_x_translate, 6 + led_y_translate);
+  matrix.setTextColor(matrix.color444(255, 255, 255));
+  matrix.print(s0);
+
+  matrix.setCursor(15 + led_x_translate, 18 + led_y_translate);
+  matrix.setTextColor(matrix.color444(255, 255, 255));
+  matrix.print(s1);
+
+  Serial.println(s0 + +" " + s1);
+}
+
+void TranslateLedLogic()
+{
+  // Led Translate logic
+  ++matrix_index;
+  if (matrix_index == 9) // 이동 행렬 초기화
+    matrix_index = 0;
+
+  led_x_translate = Matrix_TranslateLED[matrix_index][0];
+  led_y_translate = Matrix_TranslateLED[matrix_index][1];
 }
 
 void printLocalTime()
@@ -543,26 +586,30 @@ String *rStr = nullptr;
 void loop()
 {
   unsigned long currentMillis = millis();
-  // if WiFi is down, try reconnecting every CHECK_WIFI_TIME seconds
-  if ((WiFi.status() != WL_CONNECTED) && (currentMillis - previousMillis >= interval && allowsLoop))
+  // if WiFi is down, try reconnecting every interval seconds
+  if ((WiFi.status() != WL_CONNECTED) && (currentMillis - previousWiFiMillis >= interval && allowsLoop))
   {
     Serial.print(millis());
     Serial.println("ms; Reconnecting to WiFi...");
     WiFi.disconnect();
     WiFi.reconnect();
-    previousMillis = currentMillis;
+    previousWiFiMillis = currentMillis;
   }
 
   // UDP Part
   if (allowsLoop)
   {
     int packetSize = Udp.parsePacket();
+
+    currentMillis = millis();
     if (packetSize > 0)
     {
+      previousNoPacketMillis = currentMillis; // 패킷을 받았으면 no data 출력 연기
+
       Serial.print("Receive Size:");
       Serial.println(packetSize);
       int len = Udp.read(packetBuffer, 50);
-      if (len > 0)
+      if (len > 0) // 수신된 UDP 패킷이 존재할 때 parsing
       {
         int cnt = 0;
         packetBuffer[len] = 0;
@@ -571,23 +618,44 @@ void loop()
         rStr = Split(packetBuffer, '&', &cnt);
         if (cnt >= 2)
         {
-          matrix.fillScreen(0);       // 화면 클리어
-          PrintLED(rStr[1], rStr[2]); // { messageId, temp, humi }
-          Serial.println(rStr[0]);
-          Serial.println(rStr[1]);
-          Serial.println(rStr[2]);
+          if (rStr[0] == houseId) // LED 패널별로 하우스 동번호 선별해서 출력
+          {
+            previousInvalidDataMillis = currentMillis; // 갱신됐으면 데이터 만료 연기
 
-          // Led Translate logic
-          ++matrix_index;
-          if (matrix_index == 9) // 이동 행렬 초기화
-            matrix_index = 0;
+            matrix.fillScreen(0);                // 화면 클리어
+            PrintLED(rStr[0], rStr[1], rStr[2]); // { houseId, temp, humi }
+            Serial.println(rStr[0]);
+            Serial.println(rStr[1]);
+            Serial.println(rStr[2]);
 
-          led_x_translate = Matrix_TranslateLED[matrix_index][0];
-          led_y_translate = Matrix_TranslateLED[matrix_index][1];
+            TranslateLedLogic();
+          }
+
+          // 패킷은 받되 일치하는 houseId의 정보가 일정기간동안 갱신되지 않으면
+          else if (rStr[0] != houseId && currentMillis - previousInvalidDataMillis >= DATA_INVALID_TIME)
+          {
+            previousInvalidDataMillis = currentMillis;
+
+            matrix.fillScreen(0); // 화면 클리어
+            PrintInvalidData("Invalid", "Data");
+
+            TranslateLedLogic();
+          }
         }
-      }
+      } // end if (len > 0)
+    }   // end if(packetSize > 0)
+
+    // 패킷올 못받았으면?
+    else if (packetSize == 0 && currentMillis - previousNoPacketMillis >= WATING_RCV_PACKET_TIME)
+    {
+      previousNoPacketMillis = currentMillis;
+
+      matrix.fillScreen(0); // 화면 클리어
+      PrintInvalidData("NO", "Packet");
+
+      TranslateLedLogic();
     }
-  }
+  } // end if(allowsLoop)
 
   // 공장 초기화 기능 추가 : 버튼-GPIO13
   resetReading = digitalRead(resetButton); // 버튼 상태 읽기
@@ -648,7 +716,7 @@ void loop()
         {
           matrix.fillScreen(0); // 화면 클리어
           if (rStr != nullptr)
-            PrintLED(rStr[1], rStr[2]);
+            PrintLED(rStr[0], rStr[1], rStr[2]);
         }
       }
     }
