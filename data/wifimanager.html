@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8">
+    <meta charset="utf-8" />
     <title>LED 전광판 관리자</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="data:," />
@@ -17,9 +17,18 @@
           <form action="/" method="POST">
             <p>
               <label for="houseId">하우스 ID</label>
-              <input type="number" min="0" id="houseId" name="houseId" /><br />
+              <input
+                type="number"
+                min="0"
+                id="houseId"
+                name="houseId"
+                aria-required="true"
+              /><br />
+              하우스 동 번호 입력 <br />
+              <br />
 
-              <hr class="hr-text" data-content="WiFi Settings">
+<hr class="hr-text" data-content="WiFi Settings">
+
               <label for="ssid">SSID</label>
               <input
                 type="text"
