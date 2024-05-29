@@ -1,5 +1,5 @@
 // Active/DeActive Brownout problem
-// #define DISABLE_BROWNOUT_PROBLEM
+#define DISABLE_BROWNOUT_PROBLEM
 #if defined(DISABLE_BROWNOUT_PROBLEM)
 #include "soc/soc.h"          // Disable brownout problems
 #include "soc/rtc_cntl_reg.h" // Disable brownout problems
@@ -506,7 +506,7 @@ void setup()
     // Connect to Wi-Fi network with SSID and pass
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
-    WiFi.softAP("ESP-LED-MANAGER", NULL);
+    WiFi.softAP("ESP-LED-MANAGER-00", NULL);
 
     IPAddress IP = WiFi.softAPIP(); // Software enabled Access Point : 가상 라우터, 가상의 액세스 포인트
     Serial.print("AP IP address: ");
@@ -528,7 +528,7 @@ void setup()
           // HTTP POST houseId value
           if (p->name() == PARAM_INPUT_1) {
             houseId = p->value().c_str();
-            Serial.print("Cam ID set to: ");
+            Serial.print("House ID set to: ");
             Serial.println(houseId);
             // Write file to save value
             writeFile(SPIFFS, houseIdPath, houseId.c_str());
@@ -643,7 +643,7 @@ void loop()
           }
         }
       } // end if (len > 0)
-    }   // end if(packetSize > 0)
+    } // end if(packetSize > 0)
 
     // 패킷올 못받았으면?
     else if (packetSize == 0 && currentMillis - previousNoPacketMillis >= WATING_RCV_PACKET_TIME)
